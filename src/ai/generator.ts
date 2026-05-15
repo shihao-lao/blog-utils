@@ -164,7 +164,7 @@ export class ContentGenerator {
 
       return {
         title: data.titles?.[0] || '',
-        body: data.body || '',
+        body: this.cleanBody(data.body || ''),
         coverText: data.coverText || '',
         tags: data.tags || [],
         commentGuide: data.commentGuide || '',
@@ -178,6 +178,21 @@ export class ContentGenerator {
       log.error({ error: (err as Error).message }, 'JSON 解析失败');
       return null;
     }
+  }
+
+  private cleanBody(body: string): string {
+    // 移除模型元指令泄漏：不含中文字符的纯英文行（文章正文应为中文）
+    const lines = body.split('\n');
+    const cleaned = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      // 包含中文字符的行保留
+      if (/[一-鿿]/.test(trimmed)) return true;
+      // 纯英文行（看起来像句子的）移除
+      if (/^[A-Za-z][\w\s,.'":;!?()-]{10,}$/.test(trimmed)) return false;
+      return true;
+    });
+    return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
   private sanitizeJson(str: string): string {

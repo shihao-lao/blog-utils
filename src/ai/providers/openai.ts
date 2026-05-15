@@ -30,7 +30,7 @@ export class OpenAIProvider implements AiProvider {
         model: config.OPENAI_MODEL,
         messages,
         temperature: 0.8,
-        max_tokens: 8192,
+        max_tokens: 16384,
       });
 
       const content = res.choices[0]?.message?.content ?? '';

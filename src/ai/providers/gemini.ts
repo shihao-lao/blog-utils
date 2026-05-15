@@ -25,7 +25,7 @@ export class GeminiProvider implements AiProvider {
         contents,
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 16384,
         },
       });
 
