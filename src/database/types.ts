@@ -30,6 +30,15 @@ export interface AiContent {
   ai_provider?: string;
   ai_model?: string;
   status: string;
+  review_structure_score?: number;
+  review_content_score?: number;
+  review_tone_score?: number;
+  review_opening_score?: number;
+  review_ending_score?: number;
+  review_overall_score?: number;
+  review_passed?: number;
+  review_issues?: string;
+  review_suggestions?: string;
   created_at: string;
   updated_at: string;
 }

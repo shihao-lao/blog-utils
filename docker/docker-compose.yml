@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # 主服务：定时任务调度（抓取→生成→发布）
   auto-platform:
     build:
       context: ..
@@ -8,17 +7,35 @@ services:
     container_name: auto-platform
     restart: unless-stopped
     volumes:
-      - ../data:/app/data
-      - ../logs:/app/logs
-      - ../.env:/app/.env
+      - ../data:/app/data        # 数据库、导出、Cookie 持久化
+      - ../logs:/app/logs        # 日志持久化
+      - ../.env:/app/.env        # 环境变量
     environment:
       - NODE_ENV=production
-    # 如果需要有头浏览器（调试用）
-    # ports:
-    #   - "9222:9222"
-    #   - "5900:5900"
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+  # 一次性命令容器：手动执行 CLI
+  # 用法：
+  #   docker compose run --rm cli pnpm run crawl
+  #   docker compose run --rm cli pnpm run generate 5
+  #   docker compose run --rm cli pnpm run view contents
+  #   docker compose run --rm cli pnpm run review
+  #   docker compose run --rm cli pnpm run view export
+  cli:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: auto-platform-cli
+    profiles: ["manual"]
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../.env:/app/.env
+    environment:
+      - NODE_ENV=production
+    entrypoint: ["npx", "tsx"]
+    command: ["src/cli/view.ts", "summary"]

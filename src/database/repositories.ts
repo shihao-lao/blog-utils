@@ -57,6 +57,48 @@ export const contentRepo = {
   updateStatus(id: string, status: string): void {
     getDb().prepare("UPDATE ai_contents SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
   },
+
+  saveReview(id: string, review: {
+    structure_score: number;
+    content_score: number;
+    tone_score: number;
+    opening_score: number;
+    ending_score: number;
+    overall_score: number;
+    passed: boolean;
+    issues: string[];
+    suggestions: string[];
+  }): void {
+    getDb().prepare(`
+      UPDATE ai_contents SET
+        review_structure_score = ?,
+        review_content_score = ?,
+        review_tone_score = ?,
+        review_opening_score = ?,
+        review_ending_score = ?,
+        review_overall_score = ?,
+        review_passed = ?,
+        review_issues = ?,
+        review_suggestions = ?,
+        quality_score = ?,
+        status = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      review.structure_score,
+      review.content_score,
+      review.tone_score,
+      review.opening_score,
+      review.ending_score,
+      review.overall_score,
+      review.passed ? 1 : 0,
+      JSON.stringify(review.issues),
+      JSON.stringify(review.suggestions),
+      review.overall_score,
+      review.passed ? 'reviewed' : 'rejected',
+      id,
+    );
+  },
 };
 
 // ======================== PublishRecord ========================

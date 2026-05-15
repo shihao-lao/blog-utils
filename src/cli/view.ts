@@ -51,7 +51,9 @@ switch (command) {
   case 'c': {
     const limit = parseInt(process.argv[3] || '10', 10);
     const rows = db.prepare(`
-      SELECT c.id, c.title, c.status, c.tags, c.emotion_score, c.quality_score, c.ai_provider, t.title as topic_title
+      SELECT c.id, c.title, c.status, c.tags, c.emotion_score, c.quality_score, c.ai_provider,
+             c.review_overall_score, c.review_passed, c.review_issues,
+             t.title as topic_title
       FROM ai_contents c
       LEFT JOIN hot_topics t ON c.topic_id = t.id
       ORDER BY c.created_at DESC LIMIT ?
@@ -62,10 +64,16 @@ switch (command) {
     }
     rows.forEach((r: any, i: number) => {
       const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
+      const reviewStatus = r.review_passed === 1 ? 'PASS' : r.review_passed === 0 && r.review_overall_score ? 'FAIL' : 'N/A';
+      const reviewScore = r.review_overall_score ? r.review_overall_score.toFixed(2) : '-';
       console.log(`${i+1}. ${r.title}`);
       console.log(`   热点: ${r.topic_title}`);
-      console.log(`   状态: ${r.status} | 情绪: ${r.emotion_score} | 质量: ${r.quality_score}`);
+      console.log(`   状态: ${r.status} | 情绪: ${r.emotion_score} | 审查: ${reviewScore} [${reviewStatus}]`);
       console.log(`   AI: ${r.ai_provider} | 标签: ${tags.join(' ')}`);
+      if (r.review_issues && r.review_issues !== '[]') {
+        const issues = typeof r.review_issues === 'string' ? JSON.parse(r.review_issues) : r.review_issues;
+        issues.forEach((issue: string) => console.log(`     ! ${issue}`));
+      }
       console.log('');
     });
     break;
@@ -98,6 +106,20 @@ switch (command) {
     console.log(`--- 正文 ---\n${row.body}\n`);
     console.log(`--- 标签 ---\n${tags.join(' ')}\n`);
     console.log(`--- 评论引导 ---\n${row.comment_guide}\n`);
+    console.log(`--- 质量审查 ---`);
+    console.log(`总分: ${row.review_overall_score?.toFixed(2) ?? 'N/A'} | 结论: ${row.review_passed === 1 ? 'PASS' : row.review_passed === 0 && row.review_overall_score ? 'FAIL' : 'N/A'}`);
+    if (row.review_structure_score != null) {
+      console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 开头: ${row.review_opening_score?.toFixed(2)} | 结尾: ${row.review_ending_score?.toFixed(2)}`);
+    }
+    if (row.review_issues && row.review_issues !== '[]') {
+      const issues = typeof row.review_issues === 'string' ? JSON.parse(row.review_issues) : row.review_issues;
+      console.log(`问题: ${issues.join('; ')}`);
+    }
+    if (row.review_suggestions && row.review_suggestions !== '[]') {
+      const suggestions = typeof row.review_suggestions === 'string' ? JSON.parse(row.review_suggestions) : row.review_suggestions;
+      console.log(`建议: ${suggestions.join('; ')}`);
+    }
+    console.log('');
     console.log(`--- Midjourney Prompt ---\n${row.midjourney_prompt}\n`);
     console.log(`--- Stable Diffusion Prompt ---\n${row.sd_prompt}\n`);
     console.log(`--- Flux Prompt ---\n${row.flux_prompt}\n`);

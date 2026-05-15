@@ -21,5 +21,5 @@ export interface AiGenerationResult {
 
 export interface AiProvider {
   name: string;
-  generate(prompt: string): Promise<string>;
+  generate(prompt: string, system?: string): Promise<string>;
 }

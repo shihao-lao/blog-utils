@@ -26,8 +26,9 @@ data/exports/
 logs/
 *.log
 
-# Claude Code 配置
-.claude/
+# Claude Code 配置（保留 skills）
+.claude/settings.local.json
+.claude/settings.json
 
 # 浏览器持久化
 chrome_profile/

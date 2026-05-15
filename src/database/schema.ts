@@ -46,6 +46,15 @@ export function initSchema(): void {
       ai_provider TEXT,
       ai_model TEXT,
       status TEXT DEFAULT 'draft',
+      review_structure_score REAL,
+      review_content_score REAL,
+      review_tone_score REAL,
+      review_opening_score REAL,
+      review_ending_score REAL,
+      review_overall_score REAL,
+      review_passed INTEGER DEFAULT 0,
+      review_issues TEXT DEFAULT '[]',
+      review_suggestions TEXT DEFAULT '[]',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (topic_id) REFERENCES hot_topics(id)
@@ -108,6 +117,23 @@ export function initSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_run_logs_module ON run_logs(module);
     CREATE INDEX IF NOT EXISTS idx_run_logs_created ON run_logs(created_at);
   `);
+
+  // 迁移：添加审查相关列（已存在则忽略）
+  const alterStatements = [
+    "ALTER TABLE ai_contents ADD COLUMN review_structure_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_content_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_tone_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_opening_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_ending_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_overall_score REAL",
+    "ALTER TABLE ai_contents ADD COLUMN review_passed INTEGER DEFAULT 0",
+    "ALTER TABLE ai_contents ADD COLUMN review_issues TEXT DEFAULT '[]'",
+    "ALTER TABLE ai_contents ADD COLUMN review_suggestions TEXT DEFAULT '[]'",
+  ];
+
+  for (const sql of alterStatements) {
+    try { db.exec(sql); } catch { /* 列已存在，忽略 */ }
+  }
 
   log.info('数据库表结构初始化完成');
 }
