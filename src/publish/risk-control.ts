@@ -24,9 +24,9 @@ export class RiskController {
    */
   async prePublishDelay(): Promise<void> {
     // 随机等待 30-120 秒
-    const delay = Math.floor(Math.random() * 90_000) + 30_000;
+    const delay = 30_000 + Math.floor(Math.random() * 90_000);
     log.info({ delayMs: delay }, '发布前随机延迟');
-    await randomDelay(delay, delay + 1000);
+    await new Promise((r) => setTimeout(r, delay));
   }
 
   /**

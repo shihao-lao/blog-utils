@@ -233,6 +233,11 @@ export class ContentGenerator {
       }
     }
 
+    // 如果遍历结束时还在字符串内，说明 JSON 被截断了，补上闭合引号
+    if (inString) {
+      result += '"';
+    }
+
     return result;
   }
 

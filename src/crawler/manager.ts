@@ -1,6 +1,5 @@
 import { createModuleLogger } from '../utils/logger.js';
 import { topicRepo } from '../database/repositories.js';
-import { v4 as uuid } from 'uuid';
 import { WeiboHotAdapter } from './adapters/weibo.js';
 import { BaiduHotAdapter } from './adapters/baidu.js';
 import { ToutiaoHotAdapter } from './adapters/toutiao.js';
@@ -29,16 +28,24 @@ export class CrawlerManager {
   async crawlAll(): Promise<CrawlResult[]> {
     log.info(`开始全量抓取，共 ${this.adapters.length} 个源`);
 
-    const allResults = await Promise.allSettled(
-      this.adapters.map((adapter) => adapter.crawl()),
-    );
-
     let combined: CrawlResult[] = [];
-    for (const result of allResults) {
-      if (result.status === 'fulfilled') {
-        combined.push(...result.value);
-      } else {
-        log.error({ error: result.reason }, '爬虫任务失败');
+
+    for (let i = 0; i < this.adapters.length; i++) {
+      const adapter = this.adapters[i];
+
+      try {
+        const results = await adapter.crawl();
+        combined.push(...results);
+        log.info({ source: adapter.name, count: results.length }, '源抓取完成');
+      } catch (err) {
+        log.error({ source: adapter.name, error: (err as Error).message }, '爬虫任务失败');
+      }
+
+      // 源之间随机延迟 2-5 秒，避免并发暴露
+      if (i < this.adapters.length - 1) {
+        const delay = 2000 + Math.floor(Math.random() * 3000);
+        log.debug({ source: adapter.name, nextDelay: delay }, '等待后抓取下一个源');
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
 

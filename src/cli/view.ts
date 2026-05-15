@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { config } from '../config/index.js';
 
-const dbPath = './data/auto_platform.db';
+const dbPath = config.DB_PATH;
 if (!existsSync(dbPath)) {
   console.error('数据库不存在，请先运行 pnpm run crawl');
   process.exit(1);
@@ -135,7 +136,7 @@ switch (command) {
       SELECT c.*, t.title as topic_title
       FROM ai_contents c
       LEFT JOIN hot_topics t ON c.topic_id = t.id
-      WHERE c.status = 'draft'
+      WHERE c.status IN ('draft', 'reviewed')
       ORDER BY c.created_at DESC
     `).all() as any[];
 

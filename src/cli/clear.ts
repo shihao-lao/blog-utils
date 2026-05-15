@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
+import { config } from '../config/index.js';
 
-const dbPath = './data/auto_platform.db';
+const dbPath = config.DB_PATH;
 if (!existsSync(dbPath)) {
   console.error('数据库不存在');
   process.exit(1);

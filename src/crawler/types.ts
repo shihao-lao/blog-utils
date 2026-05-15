@@ -14,7 +14,7 @@ export interface CrawlerAdapter {
 
 export const SENSITIVE_KEYWORDS = [
   '色情', '赌博', '毒品', '暴力', '恐怖', '政治敏感',
-  '色情', '裸体', '赌博', '博彩', '枪支', '毒品',
+  '裸体', '博彩', '枪支',
 ];
 
 export const CATEGORY_KEYWORDS: Record<string, string[]> = {
