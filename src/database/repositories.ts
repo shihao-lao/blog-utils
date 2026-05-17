@@ -39,10 +39,11 @@ export const contentRepo = {
   create(content: Omit<AiContent, 'id' | 'created_at' | 'updated_at'>): string {
     const id = uuid();
     const db = getDb();
+    const contentType = content.content_type || 'article';
     db.prepare(`
-      INSERT INTO ai_contents (id, topic_id, title, body, cover_text, tags, category, emotion_score, quality_score, midjourney_prompt, sd_prompt, flux_prompt, comment_guide, ai_provider, ai_model, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, content.topic_id, content.title, content.body, content.cover_text, JSON.stringify(content.tags), content.category, content.emotion_score, content.quality_score, content.midjourney_prompt, content.sd_prompt, content.flux_prompt, content.comment_guide, content.ai_provider, content.ai_model, content.status);
+      INSERT INTO ai_contents (id, topic_id, title, body, cover_text, tags, category, content_type, emotion_score, quality_score, midjourney_prompt, sd_prompt, flux_prompt, comment_guide, ai_provider, ai_model, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, content.topic_id, content.title, content.body, content.cover_text, JSON.stringify(content.tags), content.category, contentType, content.emotion_score, content.quality_score, content.midjourney_prompt, content.sd_prompt, content.flux_prompt, content.comment_guide, content.ai_provider, content.ai_model, content.status);
     return id;
   },
 

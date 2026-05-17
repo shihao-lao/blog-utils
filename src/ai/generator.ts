@@ -1,6 +1,7 @@
 import { getAiProvider } from './factory.js';
 import { buildContentPrompt } from '../prompts/content.js';
-import { buildArticleReviewPrompt, parseReviewResult } from '../prompts/review.js';
+import { buildCommentPrompt } from '../prompts/comment.js';
+import { buildArticleReviewPrompt, parseReviewResult, buildCommentReviewSystemPrompt, parseCommentReviewResult, mapCommentReviewToReviewResult } from '../prompts/review.js';
 import { contentRepo, topicRepo } from '../database/repositories.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
@@ -8,10 +9,12 @@ import { config } from '../config/index.js';
 import type { AiGenerationResult } from './types.js';
 import type { ReviewResult } from '../prompts/review.js';
 
+export type ContentType = 'article' | 'comment';
+
 const log = createModuleLogger('ai:generator');
 
 export class ContentGenerator {
-  async generateForTopic(topicId: string): Promise<string | null> {
+  async generateForTopic(topicId: string, contentType: ContentType = 'article'): Promise<string | null> {
     const provider = getAiProvider();
 
     // 查找热点：先按 id 精确查找，再检查是否未处理
@@ -22,16 +25,20 @@ export class ContentGenerator {
       return null;
     }
 
-    log.info({ title: topic.title, source: topic.source }, '开始 AI 创作');
+    log.info({ title: topic.title, source: topic.source, contentType }, '开始 AI 创作');
 
-    // 构建 Prompt
-    const { system, user } = buildContentPrompt({
+    const topicParams = {
       title: topic.title,
       description: topic.description,
       category: topic.category,
       keywords: Array.isArray(topic.keywords) ? topic.keywords : JSON.parse(topic.keywords as string),
       source: topic.source,
-    });
+    };
+
+    // 根据内容类型构建 Prompt
+    const { system, user } = contentType === 'comment'
+      ? buildCommentPrompt(topicParams)
+      : buildContentPrompt(topicParams);
 
     // 调用 AI 生成
     const rawResult = await withRetry(() => provider.generate(user, system), {
@@ -46,10 +53,12 @@ export class ContentGenerator {
       return null;
     }
 
-    log.info({ title: parsed.title, bodyLen: parsed.body.length, tags: parsed.tags }, '文章生成成功，开始质量审查');
+    log.info({ title: parsed.title, bodyLen: parsed.body.length, tags: parsed.tags, contentType }, '内容生成成功，开始质量审查');
 
-    // 质量审查
-    const review = await this.reviewArticle(provider, parsed.body);
+    // 质量审查（根据内容类型选择审查 prompt）
+    const review = contentType === 'comment'
+      ? await this.reviewComment(provider, parsed.body)
+      : await this.reviewArticle(provider, parsed.body);
     if (review) {
       log.info({
         overall: review.overall_score,
@@ -70,6 +79,7 @@ export class ContentGenerator {
         cover_text: parsed.coverText,
         tags: parsed.tags,
         category: topic.category,
+        content_type: contentType,
         emotion_score: parsed.emotionScore,
         quality_score: review?.overall_score ?? parsed.qualityScore,
         midjourney_prompt: parsed.midjourneyPrompt,
@@ -119,23 +129,47 @@ export class ContentGenerator {
     }
   }
 
-  async generateBatch(limit = 5): Promise<string[]> {
+  private async reviewComment(provider: ReturnType<typeof getAiProvider>, body: string): Promise<ReviewResult | null> {
+    try {
+      const { system, user } = buildCommentReviewSystemPrompt(body);
+
+      const rawReview = await withRetry(() => provider.generate(user, system), {
+        maxRetries: 2,
+        delay: 2000,
+      });
+
+      const commentReview = parseCommentReviewResult(rawReview);
+      if (!commentReview) {
+        log.warn({ rawReview: rawReview.slice(0, 500) }, '短评审查结果解析失败');
+        return null;
+      }
+
+      return mapCommentReviewToReviewResult(commentReview);
+    } catch (err) {
+      log.error({ error: (err as Error).message }, '短评质量审查失败，跳过');
+      return null;
+    }
+  }
+
+  async generateBatch(limit = 5, contentType: ContentType = 'article'): Promise<string[]> {
     const topics = topicRepo.findUnprocessed(limit);
     const contentIds: string[] = [];
 
     for (const topic of topics) {
       try {
-        const id = await this.generateForTopic(topic.id);
+        const id = await this.generateForTopic(topic.id, contentType);
         if (id) contentIds.push(id);
       } catch (err) {
         log.error({ topicId: topic.id, error: (err as Error).message }, '批量生成失败');
       }
     }
 
-    log.info({ total: topics.length, generated: contentIds.length }, '批量生成完成');
+    log.info({ total: topics.length, generated: contentIds.length, contentType }, '批量生成完成');
     return contentIds;
   }
 
+  // 解析 AI 返回的 JSON。长文返回 titles/coverText/imagePrompts 等完整字段，
+  // 短评只返回 body/tags/commentGuide/emotionScore/qualityScore，缺失字段由默认值兜底。
   private parseResult(raw: string): AiGenerationResult | null {
     try {
       // 提取 JSON 块

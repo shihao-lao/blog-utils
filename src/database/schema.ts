@@ -129,6 +129,7 @@ export function initSchema(): void {
     "ALTER TABLE ai_contents ADD COLUMN review_passed INTEGER DEFAULT 0",
     "ALTER TABLE ai_contents ADD COLUMN review_issues TEXT DEFAULT '[]'",
     "ALTER TABLE ai_contents ADD COLUMN review_suggestions TEXT DEFAULT '[]'",
+    "ALTER TABLE ai_contents ADD COLUMN content_type TEXT DEFAULT 'article'",
   ];
 
   for (const sql of alterStatements) {

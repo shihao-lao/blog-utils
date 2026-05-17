@@ -21,6 +21,7 @@ export interface AiContent {
   cover_text?: string;
   tags: string[];
   category?: string;
+  content_type?: string;
   emotion_score: number;
   quality_score: number;
   midjourney_prompt?: string;

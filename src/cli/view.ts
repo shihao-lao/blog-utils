@@ -52,7 +52,7 @@ switch (command) {
   case 'c': {
     const limit = parseInt(process.argv[3] || '10', 10);
     const rows = db.prepare(`
-      SELECT c.id, c.title, c.status, c.tags, c.emotion_score, c.quality_score, c.ai_provider,
+      SELECT c.id, c.title, c.status, c.content_type, c.tags, c.emotion_score, c.quality_score, c.ai_provider,
              c.review_overall_score, c.review_passed, c.review_issues,
              t.title as topic_title
       FROM ai_contents c
@@ -67,7 +67,8 @@ switch (command) {
       const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
       const reviewStatus = r.review_passed === 1 ? 'PASS' : r.review_passed === 0 && r.review_overall_score ? 'FAIL' : 'N/A';
       const reviewScore = r.review_overall_score ? r.review_overall_score.toFixed(2) : '-';
-      console.log(`${i+1}. ${r.title}`);
+      const typeLabel = r.content_type === 'comment' ? '[短评]' : '[长文]';
+      console.log(`${i+1}. ${typeLabel} ${r.title}`);
       console.log(`   热点: ${r.topic_title}`);
       console.log(`   状态: ${r.status} | 情绪: ${r.emotion_score} | 审查: ${reviewScore} [${reviewStatus}]`);
       console.log(`   AI: ${r.ai_provider} | 标签: ${tags.join(' ')}`);
@@ -110,7 +111,12 @@ switch (command) {
     console.log(`--- 质量审查 ---`);
     console.log(`总分: ${row.review_overall_score?.toFixed(2) ?? 'N/A'} | 结论: ${row.review_passed === 1 ? 'PASS' : row.review_passed === 0 && row.review_overall_score ? 'FAIL' : 'N/A'}`);
     if (row.review_structure_score != null) {
-      console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 开头: ${row.review_opening_score?.toFixed(2)} | 结尾: ${row.review_ending_score?.toFixed(2)}`);
+      if ((row.content_type || 'article') === 'comment') {
+        // 短评维度：结构、内容、语气、字数、AI味
+        console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 字数: ${row.review_opening_score?.toFixed(2)} | AI味: ${row.review_ending_score?.toFixed(2)}`);
+      } else {
+        console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 开头: ${row.review_opening_score?.toFixed(2)} | 结尾: ${row.review_ending_score?.toFixed(2)}`);
+      }
     }
     if (row.review_issues && row.review_issues !== '[]') {
       const issues = typeof row.review_issues === 'string' ? JSON.parse(row.review_issues) : row.review_issues;
@@ -132,23 +138,79 @@ switch (command) {
     const outDir = './data/exports';
     mkdirSync(outDir, { recursive: true });
 
-    const contents = db.prepare(`
+    // 支持 --type article|comment 过滤
+    let typeFilter = '';
+    const exportArgs = process.argv.slice(3);
+    for (let i = 0; i < exportArgs.length; i++) {
+      if (exportArgs[i] === '--type' && exportArgs[i + 1]) {
+        const t = exportArgs[i + 1];
+        if (t === 'article' || t === 'comment') {
+          typeFilter = t;
+        } else {
+          console.error(`无效的内容类型: ${t}，支持 article 或 comment`);
+          process.exit(1);
+        }
+        i++;
+      }
+    }
+
+    let query = `
       SELECT c.*, t.title as topic_title
       FROM ai_contents c
       LEFT JOIN hot_topics t ON c.topic_id = t.id
       WHERE c.status IN ('draft', 'reviewed')
-      ORDER BY c.created_at DESC
-    `).all() as any[];
+    `;
+    const params: any[] = [];
+    if (typeFilter) {
+      query += ` AND c.content_type = ?`;
+      params.push(typeFilter);
+    }
+    query += ` ORDER BY c.created_at DESC`;
+
+    const contents = db.prepare(query).all(...params) as any[];
 
     if (contents.length === 0) {
       console.log('没有待导出的内容');
       break;
     }
 
+    // 按内容类型分目录
+    const articleDir = join(outDir, 'articles');
+    const commentDir = join(outDir, 'comments');
+    const hasArticles = contents.some((r: any) => (r.content_type || 'article') === 'article');
+    const hasComments = contents.some((r: any) => r.content_type === 'comment');
+    if (hasArticles) mkdirSync(articleDir, { recursive: true });
+    if (hasComments) mkdirSync(commentDir, { recursive: true });
+
     for (const row of contents) {
       const tags = typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags;
       const safeName = row.title.replace(/[<>:"/\\|?*]/g, '').slice(0, 50);
-      const md = `# ${row.title}
+      const isComment = (row.content_type || 'article') === 'comment';
+
+      let md: string;
+      if (isComment) {
+        // 短评格式：简洁，只有正文和标签
+        md = `# ${row.title}
+
+## 正文
+${row.body}
+
+## 标签
+${tags.join(' ')}
+
+## 评论引导
+${row.comment_guide || ''}
+
+---
+热点来源: ${row.topic_title}
+情绪分数: ${row.emotion_score}
+质量分数: ${row.quality_score}
+AI: ${row.ai_provider} / ${row.ai_model}
+`;
+        writeFileSync(join(commentDir, `${safeName}.md`), md);
+      } else {
+        // 长文格式：完整
+        md = `# ${row.title}
 
 ## 封面文案
 ${row.cover_text}
@@ -177,20 +239,31 @@ ${row.flux_prompt}
 质量分数: ${row.quality_score}
 AI: ${row.ai_provider} / ${row.ai_model}
 `;
-      writeFileSync(join(outDir, `${safeName}.md`), md);
+        writeFileSync(join(articleDir, `${safeName}.md`), md);
+      }
     }
 
-    console.log(`已导出 ${contents.length} 条内容到 ${outDir}/`);
+    const articleCount = contents.filter((r: any) => (r.content_type || 'article') === 'article').length;
+    const commentCount = contents.filter((r: any) => r.content_type === 'comment').length;
+    if (typeFilter) {
+      console.log(`已导出 ${contents.length} 条${typeFilter === 'comment' ? '短评' : '长文'}到 ${outDir}/`);
+    } else {
+      console.log(`已导出 ${contents.length} 条内容到 ${outDir}/`);
+      if (articleCount > 0) console.log(`  长文: ${articleCount} 条 → ${articleDir}/`);
+      if (commentCount > 0) console.log(`  短评: ${commentCount} 条 → ${commentDir}/`);
+    }
     break;
   }
 
   default:
     console.log(`用法:
-  pnpm run view summary     数据概览
-  pnpm run view topics      热点列表
-  pnpm run view contents    AI 内容列表
-  pnpm run view detail <id> 查看内容详情
-  pnpm run view export      导出所有 draft 内容为 Markdown`);
+  pnpm run view summary               数据概览
+  pnpm run view topics                热点列表
+  pnpm run view contents              AI 内容列表
+  pnpm run view detail <id>           查看内容详情
+  pnpm run view export                导出所有 draft 内容为 Markdown
+  pnpm run view export --type article 仅导出长文
+  pnpm run view export --type comment 仅导出短评`);
 }
 
 db.close();
