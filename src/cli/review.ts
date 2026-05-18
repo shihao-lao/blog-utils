@@ -2,7 +2,7 @@ import { initSchema } from '../database/schema.js';
 import { getDb, closeDb } from '../database/index.js';
 import { contentRepo } from '../database/repositories.js';
 import { getAiProvider } from '../ai/factory.js';
-import { buildArticleReviewPrompt, parseReviewResult } from '../prompts/review.js';
+import { buildArticleReviewPrompt, parseReviewResult, buildCommentReviewSystemPrompt, parseCommentReviewResult, mapCommentReviewToReviewResult } from '../prompts/review.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
 
@@ -15,21 +15,21 @@ async function run() {
 
   const limit = parseInt(process.argv[2] || '999', 10);
 
-  // 查找所有没有审查结果的文章
+  // 查找所有没有审查结果的内容
   const rows = db.prepare(`
-    SELECT id, title, body FROM ai_contents
+    SELECT id, title, body, content_type FROM ai_contents
     WHERE review_overall_score IS NULL
     ORDER BY created_at DESC
     LIMIT ?
   `).all(limit) as any[];
 
   if (rows.length === 0) {
-    console.log('没有需要审查的文章');
+    console.log('没有需要审查的内容');
     closeDb();
     return;
   }
 
-  console.log(`找到 ${rows.length} 篇待审查文章，开始审查...\n`);
+  console.log(`找到 ${rows.length} 条待审查内容，开始审查...\n`);
 
   let passed = 0;
   let failed = 0;
@@ -38,13 +38,23 @@ async function run() {
     try {
       log.info({ title: row.title }, '开始审查');
 
-      const { system, user } = buildArticleReviewPrompt(row.body);
+      const isComment = row.content_type === 'comment';
+
+      const { system, user } = isComment
+        ? buildCommentReviewSystemPrompt(row.body)
+        : buildArticleReviewPrompt(row.body);
       const rawReview = await withRetry(() => provider.generate(user, system), {
         maxRetries: 2,
         delay: 2000,
       });
 
-      const review = parseReviewResult(rawReview);
+      let review;
+      if (isComment) {
+        const commentReview = parseCommentReviewResult(rawReview);
+        review = commentReview ? mapCommentReviewToReviewResult(commentReview) : null;
+      } else {
+        review = parseReviewResult(rawReview);
+      }
       if (!review) {
         log.warn({ title: row.title }, '审查结果解析失败，跳过');
         continue;

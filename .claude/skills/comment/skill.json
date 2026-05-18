@@ -1,0 +1,17 @@
+{
+  "name": "热点短评生成器",
+  "version": "1.0.0",
+  "description": "输入热点新闻，生成180-250字的理性轻评论。",
+  "author": "Demo科技",
+  "tags": ["短评", "热点", "评论", "小红书"],
+  "commands": [
+    {
+      "command": "/comment",
+      "description": "生成热点短评",
+      "usage": "/comment [热点内容]"
+    }
+  ],
+  "language": "zh-CN",
+  "platform": "Claude Code",
+  "category": "内容创作"
+}

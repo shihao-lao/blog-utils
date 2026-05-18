@@ -1,19 +1,35 @@
 # Demo科技 - AI 内容自动化生产平台
 
-面向科技/互联网领域的公众号内容自动化工具，支持热点抓取、AI 深度文章生成、自动发布全流程。
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Node](https://img.shields.io/badge/node-%3E%3D20-green)
+![Platform](https://img.shields.io/badge/platform-Claude%20Code-orange)
+
+面向科技/互联网领域的公众号内容自动化工具，支持热点抓取、AI 深度文章生成、质量审查、自动发布全流程。
 
 目标受众：25-40 岁互联网从业者、科技爱好者。
 
-## 功能特性
+## 核心特性
 
+### 全自动流水线
 - **热点抓取**：微博热搜、百度热搜、今日头条、RSS 订阅，自动去重、分类、敏感词过滤
-- **AI 创作**：支持 OpenAI / DeepSeek / Gemini，生成 1500-2500 字深度文章，附带标题、摘要、标签、AI 绘图提示词
-- **质量审查**：生成后自动二次审查，5 维度打分（结构/内容/语气/开头/结尾），未通过标记为 rejected
-- **写作风格**：midnight-friend 人格，第一人称，叙事式结构，禁止并列模板和 AI 腔
-- **自动发布**：Playwright 驱动小红书自动化发布，Cookie 持久化、反检测、随机延迟
-- **风控系统**：发布频率限制、内容去重、模拟真人操作
-- **定时调度**：Cron 定时任务，支持抓取、创作、发布全流程自动化
-- **数据管理**：SQLite 存储，支持 CLI 查看、导出 Markdown、清空数据
+- **AI 创作**：支持 OpenAI / DeepSeek / Gemini，生成 1500-2500 字深度文章
+- **质量审查**：5 维度自动打分（结构/内容/语气/开头/结尾），未通过标记 rejected
+- **自动发布**：Playwright 驱动小红书发布，Cookie 持久化、反检测、随机延迟
+- **定时调度**：Cron 定时任务，全流程无人值守
+
+### 写作风格
+- Demo科技 人设：第一人称，叙事式结构，像懂行的朋友在分享见解
+- 禁止并列模板和 AI 腔——不使用"首先/其次/最后"
+- 每篇文章至少 2-3 个认知转折，有具体案例和数字
+- 输出包含标题、封面文案、正文、标签、评论引导语、AI 绘图提示词
+
+### Claude Code Skill
+项目内置 Claude Code Skill，可直接在对话中生成内容：
+
+```
+/write AI Agent 如何改变产品经理的工作方式   → 生成完整公众号文章
+/comment 某某公司宣布裁员30%                → 生成热点短评（180-250字）
+```
 
 ## 技术栈
 
@@ -84,44 +100,73 @@ pnpm run post:xhs
 - `reviewed` = 审查通过（总分 >= 0.65，且结构和内容单项 >= 0.5）
 - `rejected` = 审查未通过，issues 列出具体问题
 
+## Skill 文件说明
+
+项目内置 Claude Code Skill 系统，位于 `.claude/skills/` 目录：
+
+### write/ — 文章生成器
+| 文件 | 说明 |
+|------|------|
+| `SKILL.md` | 核心指令：Demo科技写作风格、输出格式、认知转折技巧、禁止规则 |
+| `skill.json` | Skill 元数据配置 |
+| `质量自检.md` | 文章质量自检清单——标题/开头/内容/风格/格式逐项检查 |
+| `作者配置模板.md` | 作者人设配置模板，可自定义写作风格 |
+
+### comment/ — 热点短评生成器
+| 文件 | 说明 |
+|------|------|
+| `SKILL.md` | 短评写作指令——理性温和、三段式、180-250字 |
+| `skill.json` | Skill 元数据配置 |
+
+### demo/ — 项目技术文档
+| 文件 | 说明 |
+|------|------|
+| `SKILL.md` | 项目架构、代码约定、开发指南 |
+
 ## 写作风格
 
 文章遵循「Demo科技」风格：
+
+**核心原则：减少条目式输出，追求流畅自然**
+
+```
+❌ 避免：
+1. 首先，你要做A
+2. 然后，你要做B
+3. 最后，你要做C
+
+✅ 采用：
+做这件事的时候，大多数人会直接从A开始。但我的建议是，先花点时间
+想清楚B，然后再回头做A。为什么？因为[原因]。至于C，那是水到渠成的事。
+```
 
 - 叙事式结构，禁止"第一、第二、第三"并列模板
 - 第一人称口语化表达，像懂行的朋友在分享见解
 - 每篇文章只解决一个问题，把问题说透
 - 至少 2-3 个认知转折，让读者停下来想一下
 - 具体案例和数字，拒绝"正确的废话"
-
-## Claude Code Skill
-
-项目内置 `/write` 命令，可在 Claude Code 中直接生成公众号文章：
-
-```
-/write AI Agent 如何改变产品经理的工作方式
-```
-
-输入主题即可按 Demo科技 的风格配置输出完整文章（标题、摘要、正文、互动问题）。
+- 不使用 emoji、不使用 Markdown 格式符号、正文纯文字
 
 ## 项目结构
 
 ```
 src/
-├── config/          # 环境变量配置
+├── config/          # 环境变量配置（Zod 校验）
 ├── crawler/         # 热点爬虫（微博/百度/头条/RSS）
 ├── ai/              # AI 创作 + 质量审查
 ├── prompts/         # 写作 Prompt + 审查 Prompt
 ├── publish/         # 小红书发布（Playwright 自动化）
 ├── scheduler/       # Cron 定时任务
-├── database/        # SQLite 数据层
+├── database/        # SQLite 数据层（WAL 模式）
 ├── utils/           # 工具库（日志/重试/HTTP）
 ├── cli/             # CLI 命令
 └── index.ts         # 主入口（定时调度）
 
 .claude/
 └── skills/
-    └── write/       # /write skill
+    ├── write/       # /write 文章生成 Skill（6 个文件）
+    ├── comment/     # /comment 短评生成 Skill
+    └── demo/        # 项目技术文档 Skill
 
 docker/
 ├── Dockerfile
@@ -154,14 +199,17 @@ docker compose down
 
 参见 `.env.example`，主要配置：
 
-- `AI_PROVIDER`：AI 提供商（openai / deepseek / gemini）
-- `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` / `GEMINI_API_KEY`：API Key
-- `OPENAI_MODEL` / `DEEPSEEK_MODEL` / `GEMINI_MODEL`：模型名
-- `OPENAI_BASE_URL` / `DEEPSEEK_BASE_URL`：API 地址（支持第三方兼容 API）
-- `XHS_MAX_PUBLISH_PER_DAY`：每日发布上限
-- `SCHEDULE_CRON_CRAWL`：抓取定时规则（默认每小时）
-- `SCHEDULE_CRON_GENERATE`：生成定时规则（默认每小时）
-- `SCHEDULE_CRON_PUBLISH`：发布定时规则（默认 9/12/18 点）
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `AI_PROVIDER` | AI 提供商 | `openai` |
+| `OPENAI_API_KEY` | OpenAI API Key | - |
+| `OPENAI_MODEL` | 模型名 | `gpt-4o` |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | - |
+| `GEMINI_API_KEY` | Gemini API Key | - |
+| `XHS_MAX_PUBLISH_PER_DAY` | 每日发布上限 | `3` |
+| `SCHEDULE_CRON_CRAWL` | 抓取定时 | `0 */1 * * *` |
+| `SCHEDULE_CRON_GENERATE` | 生成定时 | `30 */1 * * *` |
+| `SCHEDULE_CRON_PUBLISH` | 发布定时 | `0 9,12,18 * * *` |
 
 ## 内容方向
 
