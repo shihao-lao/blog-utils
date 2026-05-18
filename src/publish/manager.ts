@@ -52,11 +52,15 @@ export class PublishManager {
     });
 
     try {
+      // 查找可用的图片文件
+      const imagePaths = this.findImages(content.id);
+
       const options: PublishOptions = {
         title: content.title,
         body: content.body,
         tags: Array.isArray(content.tags) ? content.tags : JSON.parse(content.tags as string),
         coverText: content.cover_text,
+        imagePaths,
       };
 
       const result = await this.publisher.publish(options);
@@ -86,7 +90,16 @@ export class PublishManager {
   }
 
   async publishDraft(limit = 1): Promise<PublishResult[]> {
-    const drafts = contentRepo.findByStatus('draft', limit);
+    // 查询 draft 和 reviewed 状态的文章（reviewed = 审核通过，可发布）
+    const drafts = [
+      ...contentRepo.findByStatus('draft', limit),
+      ...contentRepo.findByStatus('reviewed', limit),
+    ].slice(0, limit);
+
+    if (drafts.length === 0) {
+      log.warn('没有可发布的文章（draft/reviewed）');
+    }
+
     const results: PublishResult[] = [];
 
     for (const content of drafts) {
@@ -101,6 +114,28 @@ export class PublishManager {
     }
 
     return results;
+  }
+
+  private findImages(contentId: string): string[] {
+    const { readdirSync, existsSync } = require('fs') as typeof import('fs');
+
+    // 按 contentId 查找图片目录
+    const imageDir = `./data/images/${contentId}`;
+    if (existsSync(imageDir)) {
+      return readdirSync(imageDir)
+        .filter((f: string) => /\.(png|jpg|jpeg|webp)$/i.test(f))
+        .map((f: string) => `${imageDir}/${f}`);
+    }
+
+    // 兜底：使用 data/images 下的所有图片
+    const fallbackDir = './data/images';
+    if (existsSync(fallbackDir)) {
+      return readdirSync(fallbackDir)
+        .filter((f: string) => /\.(png|jpg|jpeg|webp)$/i.test(f))
+        .map((f: string) => `${fallbackDir}/${f}`);
+    }
+
+    return [];
   }
 
   async close(): Promise<void> {

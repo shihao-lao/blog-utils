@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { config } from '../config/index.js';
 import { createModuleLogger } from '../utils/logger.js';
-import { withRetry, sleep, randomDelay } from '../utils/retry.js';
+import { withRetry, sleep } from '../utils/retry.js';
 import { RiskController } from './risk-control.js';
 import type { PlatformPublisher, PublishOptions, PublishResult } from './types.js';
 
@@ -63,8 +63,8 @@ export class XhsPublisher implements PlatformPublisher {
 
     try {
       await this.page.goto('https://creator.xiaohongshu.com', {
-        waitUntil: 'networkidle',
-        timeout: 15_000,
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
       });
 
       // 检查是否在登录页
@@ -87,27 +87,36 @@ export class XhsPublisher implements PlatformPublisher {
     log.info('开始小红书登录流程');
 
     await this.page.goto('https://creator.xiaohongshu.com/login', {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
     });
 
     log.warn('请在浏览器中手动完成登录（扫码/手机号）...');
     log.warn('登录完成后，系统将自动保存 Cookie');
 
-    // 等待登录成功（最多 5 分钟）
-    try {
-      await this.page.waitForURL('**/creator.xiaohongshu.com/**', {
-        timeout: 300_000,
-      });
+    // 轮询检测登录状态（最多 5 分钟，每 3 秒检查一次）
+    const maxWait = 300_000;
+    const interval = 3_000;
+    const start = Date.now();
 
-      // 保存 Cookie
-      await this.saveCookies();
-      log.info('登录成功，Cookie 已保存');
-      return true;
-    } catch {
-      log.error('登录超时');
-      return false;
+    while (Date.now() - start < maxWait) {
+      await sleep(interval);
+
+      // 只靠 URL 跳离登录页判断登录成功
+      const url = this.page.url();
+      if (!url.includes('/login') && !url.includes('/passport')) {
+        log.info('检测到页面跳转，登录成功');
+        await sleep(3000);
+        await this.saveCookies();
+        return true;
+      }
+
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      log.debug(`等待登录中... (${elapsed}s, 请在浏览器中扫码)`);
     }
+
+    log.error('登录超时（5分钟内未检测到登录）');
+    return false;
   }
 
   async publish(options: PublishOptions): Promise<PublishResult> {
@@ -127,29 +136,49 @@ export class XhsPublisher implements PlatformPublisher {
 
           // 导航到发布页
           await this.page!.goto(XHS_CREATE_URL, {
-            waitUntil: 'networkidle',
-            timeout: 30_000,
+            waitUntil: 'domcontentloaded',
+            timeout: 60_000,
           });
-          await sleep(2000);
+          await sleep(3000);
 
-          // 上传图片（如果有）
-          if (options.imagePaths && options.imagePaths.length > 0) {
-            await this.uploadImages(options.imagePaths);
+          // 第 1 步：切换到"上传图文"tab
+          log.info('切换到图文发布模式...');
+          const imageTextTab = await this.page!.$('text=上传图文');
+          if (imageTextTab) {
+            await imageTextTab.click();
+            await sleep(2000);
+          } else {
+            log.warn('未找到"上传图文"tab，可能已在图文模式');
           }
 
-          // 填写标题
+          // 第 2 步：上传图片（如果有）
+          if (options.imagePaths && options.imagePaths.length > 0) {
+            await this.uploadImages(options.imagePaths);
+            // 等待编辑器出现（上传图片后才会显示）
+            log.info('等待编辑器加载...');
+            await this.page!.waitForSelector(
+              'textarea, [contenteditable="true"], [placeholder*="标题"]',
+              { timeout: 30_000 },
+            ).catch(() => log.warn('等待编辑器超时'));
+            await sleep(2000);
+          } else {
+            log.warn('没有图片，小红书图文笔记需要至少一张图片');
+            return { success: false, error: '没有图片文件，无法发布图文笔记' };
+          }
+
+          // 第 3 步：填写标题
           await this.fillTitle(options.title);
           await this.risk.actionDelay();
 
-          // 填写正文
+          // 第 4 步：填写正文
           await this.fillBody(options.body);
           await this.risk.actionDelay();
 
-          // 添加标签
+          // 第 5 步：添加标签
           await this.addTags(options.tags);
           await this.risk.actionDelay();
 
-          // 点击发布
+          // 第 6 步：点击发布
           const result = await this.clickPublish();
 
           return result;
@@ -187,15 +216,11 @@ export class XhsPublisher implements PlatformPublisher {
   private async fillTitle(title: string): Promise<void> {
     if (!this.page) return;
 
-    // 小红书发布页标题输入框
-    const titleInput = await this.page.$(
-      '#title-textarea, [placeholder*="标题"], [class*="title"] input, [class*="title"] textarea',
-    );
+    const titleInput = await this.page.$('input[placeholder*="标题"]');
 
     if (titleInput) {
       await titleInput.click();
       await sleep(500);
-      // 模拟人工输入
       for (const char of title) {
         await this.page.keyboard.type(char, { delay: Math.random() * 100 + 50 });
       }
@@ -208,16 +233,12 @@ export class XhsPublisher implements PlatformPublisher {
   private async fillBody(body: string): Promise<void> {
     if (!this.page) return;
 
-    // 小红书正文编辑器
-    const bodyEditor = await this.page.$(
-      '#post-textarea, [placeholder*="正文"], [contenteditable="true"], [class*="content"] [contenteditable]',
-    );
+    const bodyEditor = await this.page.$('[contenteditable="true"]');
 
     if (bodyEditor) {
       await bodyEditor.click();
       await sleep(500);
 
-      // 分段输入，模拟人工
       const paragraphs = body.split('\n');
       for (const para of paragraphs) {
         if (para.trim()) {
@@ -235,40 +256,38 @@ export class XhsPublisher implements PlatformPublisher {
   private async addTags(tags: string[]): Promise<void> {
     if (!this.page) return;
 
-    // 找到标签输入区域
-    const tagInput = await this.page.$(
-      '[placeholder*="标签"], [placeholder*="话题"], [class*="tag"] input',
-    );
+    for (const tag of tags.slice(0, 10)) {
+      const tagText = tag.startsWith('#') ? tag.slice(1) : tag;
 
-    if (tagInput) {
-      for (const tag of tags.slice(0, 10)) {
-        const tagText = tag.startsWith('#') ? tag.slice(1) : tag;
-        await tagInput.click();
-        await sleep(300);
-        await this.page.keyboard.type(tagText, { delay: 50 });
-        await sleep(500);
-        // 尝试选择第一个推荐
-        const suggestion = await this.page.$('[class*="suggest"] li:first-child, [class*="tag-list"] div:first-child');
-        if (suggestion) {
-          await suggestion.click();
-        } else {
-          await this.page.keyboard.press('Enter');
-        }
-        await sleep(300);
+      // 点击"话题"按钮打开话题搜索
+      const topicBtn = await this.page.$('#topicBtn, button:has-text("话题")');
+      if (topicBtn) {
+        await topicBtn.click();
+        await sleep(1000);
       }
-      log.info({ count: tags.length }, '标签已添加');
-    } else {
-      log.warn('未找到标签输入框');
+
+      // 在弹出的搜索框中输入话题
+      await this.page.keyboard.type(tagText, { delay: 50 });
+      await sleep(1500);
+
+      // 点击第一个推荐结果
+      const suggestion = await this.page.$('[class*="suggest"] div:first-child, [class*="topic-item"]:first-child, [class*="drop-list"] div:first-child');
+      if (suggestion) {
+        await suggestion.click();
+        log.info({ tag: tagText }, '话题已添加');
+      } else {
+        await this.page.keyboard.press('Enter');
+        log.info({ tag: tagText }, '话题已输入');
+      }
+      await sleep(500);
     }
   }
 
   private async clickPublish(): Promise<PublishResult> {
     if (!this.page) throw new Error('页面未初始化');
 
-    // 找到发布按钮
-    const publishBtn = await this.page.$(
-      'button:has-text("发布"), [class*="publish"] button, button[class*="submit"]',
-    );
+    // 发布按钮在页面右下角
+    const publishBtn = await this.page.$('button:has-text("发布")');
 
     if (publishBtn) {
       await publishBtn.click();
@@ -277,16 +296,16 @@ export class XhsPublisher implements PlatformPublisher {
       // 等待发布完成
       await sleep(5000);
 
-      // 检查是否发布成功
-      const url = this.page.url();
-      if (url.includes('publish') && !url.includes('login')) {
-        log.info('发布成功');
+      // 检查是否有成功提示
+      const successMsg = await this.page.$('text=发布成功');
+      if (successMsg) {
         return { success: true };
       }
 
-      // 检查是否有成功提示
-      const successMsg = await this.page.$('[class*="success"], :text("发布成功")');
-      if (successMsg) {
+      // 检查 URL 是否跳转到笔记管理页（发布成功的标志）
+      const url = this.page.url();
+      if (!url.includes('/publish')) {
+        log.info('页面已跳转，发布成功');
         return { success: true };
       }
 

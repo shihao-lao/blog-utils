@@ -13,6 +13,7 @@
     "input": "tsx src/cli/input.ts",
     "view": "tsx src/cli/view.ts",
     "clear": "tsx src/cli/clear.ts",
+    "pipeline": "tsx src/cli/local-export.ts",
     "review": "tsx src/cli/review.ts",
     "migrate": "tsx src/database/migrate.ts",
     "test": "vitest",
