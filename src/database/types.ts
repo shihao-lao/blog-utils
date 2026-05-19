@@ -7,6 +7,7 @@ export interface HotTopic {
   heat_score: number;
   category: string;
   keywords: string[];
+  images: string[];
   is_sensitive: number;
   is_processed: number;
   created_at: string;
@@ -22,6 +23,7 @@ export interface AiContent {
   tags: string[];
   category?: string;
   content_type?: string;
+  images: string[];
   emotion_score: number;
   quality_score: number;
   midjourney_prompt?: string;

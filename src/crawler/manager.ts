@@ -81,6 +81,7 @@ export class CrawlerManager {
         keywords,
         is_sensitive: sensitive,
         is_processed: 0,
+        images: item.images ?? [],
       });
       saved++;
     }

@@ -27,12 +27,20 @@ export class WeiboHotAdapter implements CrawlerAdapter {
 
       for (const item of data) {
         if (!item.word) continue;
+        const images: string[] = [];
+        if (Array.isArray(item.pic_urls)) {
+          for (const pic of item.pic_urls) {
+            const url = pic.thumbnail_pic || pic.bmiddle_pic || pic.original_pic;
+            if (url) images.push(url);
+          }
+        }
         results.push({
           title: item.word,
           url: `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
           description: item.note || '',
           heat: item.num || item.raw_hot || 0,
           source: 'weibo',
+          images: images.length > 0 ? images : undefined,
         });
       }
 

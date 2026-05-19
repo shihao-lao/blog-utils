@@ -9,9 +9,9 @@ export const topicRepo = {
     const id = uuid();
     const db = getDb();
     db.prepare(`
-      INSERT OR IGNORE INTO hot_topics (id, source, title, url, description, heat_score, category, keywords, is_sensitive, is_processed)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, topic.source, topic.title, topic.url, topic.description, topic.heat_score, topic.category, JSON.stringify(topic.keywords), topic.is_sensitive, topic.is_processed);
+      INSERT OR IGNORE INTO hot_topics (id, source, title, url, description, heat_score, category, keywords, images, is_sensitive, is_processed)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, topic.source, topic.title, topic.url, topic.description, topic.heat_score, topic.category, JSON.stringify(topic.keywords), JSON.stringify(topic.images ?? []), topic.is_sensitive, topic.is_processed);
     return id;
   },
 
@@ -41,9 +41,9 @@ export const contentRepo = {
     const db = getDb();
     const contentType = content.content_type || 'article';
     db.prepare(`
-      INSERT INTO ai_contents (id, topic_id, title, body, cover_text, tags, category, content_type, emotion_score, quality_score, midjourney_prompt, sd_prompt, flux_prompt, comment_guide, ai_provider, ai_model, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, content.topic_id, content.title, content.body, content.cover_text, JSON.stringify(content.tags), content.category, contentType, content.emotion_score, content.quality_score, content.midjourney_prompt, content.sd_prompt, content.flux_prompt, content.comment_guide, content.ai_provider, content.ai_model, content.status);
+      INSERT INTO ai_contents (id, topic_id, title, body, cover_text, tags, category, content_type, images, emotion_score, quality_score, midjourney_prompt, sd_prompt, flux_prompt, comment_guide, ai_provider, ai_model, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, content.topic_id, content.title, content.body, content.cover_text, JSON.stringify(content.tags), content.category, contentType, JSON.stringify(content.images ?? []), content.emotion_score, content.quality_score, content.midjourney_prompt, content.sd_prompt, content.flux_prompt, content.comment_guide, content.ai_provider, content.ai_model, content.status);
     return id;
   },
 

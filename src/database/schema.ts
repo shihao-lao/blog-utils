@@ -17,6 +17,7 @@ export function initSchema(): void {
       heat_score INTEGER DEFAULT 0,
       category TEXT DEFAULT '其他',
       keywords TEXT DEFAULT '[]',
+      images TEXT DEFAULT '[]',
       is_sensitive INTEGER DEFAULT 0,
       is_processed INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
@@ -37,6 +38,7 @@ export function initSchema(): void {
       cover_text TEXT,
       tags TEXT DEFAULT '[]',
       category TEXT,
+      images TEXT DEFAULT '[]',
       emotion_score REAL DEFAULT 0,
       quality_score REAL DEFAULT 0,
       midjourney_prompt TEXT,
@@ -130,6 +132,8 @@ export function initSchema(): void {
     "ALTER TABLE ai_contents ADD COLUMN review_issues TEXT DEFAULT '[]'",
     "ALTER TABLE ai_contents ADD COLUMN review_suggestions TEXT DEFAULT '[]'",
     "ALTER TABLE ai_contents ADD COLUMN content_type TEXT DEFAULT 'article'",
+    "ALTER TABLE hot_topics ADD COLUMN images TEXT DEFAULT '[]'",
+    "ALTER TABLE ai_contents ADD COLUMN images TEXT DEFAULT '[]'",
   ];
 
   for (const sql of alterStatements) {

@@ -17,6 +17,7 @@ export interface AiGenerationResult {
   fluxPrompt: string;
   emotionScore: number;
   qualityScore: number;
+  images: string[];
 }
 
 export interface AiProvider {

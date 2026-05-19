@@ -24,12 +24,24 @@ export class ToutiaoHotAdapter implements CrawlerAdapter {
       if (Array.isArray(data)) {
         for (const item of data) {
           if (!item.Title) continue;
+          const images: string[] = [];
+          // API 返回 Image 字段（大写 I），包含 url
+          if (item.Image?.url) {
+            images.push(item.Image.url);
+          }
+          // 有些条目有 url_list 包含多张图
+          if (Array.isArray(item.Image?.url_list)) {
+            for (const u of item.Image.url_list) {
+              if (u?.url && !images.includes(u.url)) images.push(u.url);
+            }
+          }
           results.push({
             title: item.Title,
             url: item.Url || '',
             description: item.Abstract || '',
             heat: parseInt(item.HotValue || '0', 10),
             source: 'toutiao',
+            images: images.length > 0 ? images : undefined,
           });
         }
       }

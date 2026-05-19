@@ -5,6 +5,7 @@ import { buildArticleReviewPrompt, parseReviewResult, buildCommentReviewSystemPr
 import { contentRepo, topicRepo } from '../database/repositories.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
+import { downloadImages } from '../utils/image-downloader.js';
 import { config } from '../config/index.js';
 import type { AiGenerationResult } from './types.js';
 import type { ReviewResult } from '../prompts/review.js';
@@ -35,10 +36,23 @@ export class ContentGenerator {
       source: topic.source,
     };
 
+    // 下载热点相关图片
+    let localImagePaths: string[] = [];
+    if (contentType === 'article') {
+      const imageUrls: string[] = Array.isArray(topic.images)
+        ? topic.images
+        : JSON.parse(topic.images || '[]');
+      if (imageUrls.length > 0) {
+        const imageDir = `./data/images/${topic.id}`;
+        localImagePaths = await downloadImages(imageUrls, imageDir, 5);
+        log.info({ topicId: topic.id, downloaded: localImagePaths.length }, '图片下载完成');
+      }
+    }
+
     // 根据内容类型构建 Prompt
     const { system, user } = contentType === 'comment'
       ? buildCommentPrompt(topicParams)
-      : buildContentPrompt(topicParams);
+      : buildContentPrompt({ ...topicParams, images: localImagePaths });
 
     // 调用 AI 生成
     const rawResult = await withRetry(() => provider.generate(user, system), {
@@ -80,6 +94,7 @@ export class ContentGenerator {
         tags: parsed.tags,
         category: topic.category,
         content_type: contentType,
+        images: parsed.images,
         emotion_score: parsed.emotionScore,
         quality_score: review?.overall_score ?? parsed.qualityScore,
         midjourney_prompt: parsed.midjourneyPrompt,
@@ -207,6 +222,7 @@ export class ContentGenerator {
         fluxPrompt: data.fluxPrompt || '',
         emotionScore: data.emotionScore || 0.5,
         qualityScore: data.qualityScore || 0.5,
+        images: data.images || [],
       };
     } catch (err) {
       log.error({ error: (err as Error).message }, 'JSON 解析失败');

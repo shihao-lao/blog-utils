@@ -5,6 +5,7 @@ export interface CrawlResult {
   heat: number;
   source: string;
   keywords?: string[];
+  images?: string[];
 }
 
 export interface CrawlerAdapter {
