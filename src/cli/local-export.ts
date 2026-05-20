@@ -5,8 +5,8 @@ const typeIdx = args.indexOf('--type');
 let type = '';
 if (typeIdx !== -1 && args[typeIdx + 1]) {
   type = args[typeIdx + 1];
-  if (type !== 'article' && type !== 'comment') {
-    console.error('无效的 --type，支持: article | comment');
+  if (type !== 'article' && type !== 'comment' && type !== 'philosopher' && type !== 'jargon') {
+    console.error('无效的 --type，支持: article | comment | philosopher | jargon');
     process.exit(1);
   }
 }

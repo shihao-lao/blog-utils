@@ -67,7 +67,8 @@ switch (command) {
       const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
       const reviewStatus = r.review_passed === 1 ? 'PASS' : r.review_passed === 0 && r.review_overall_score ? 'FAIL' : 'N/A';
       const reviewScore = r.review_overall_score ? r.review_overall_score.toFixed(2) : '-';
-      const typeLabel = r.content_type === 'comment' ? '[短评]' : '[长文]';
+      const typeLabelMap: Record<string, string> = { article: '[长文]', comment: '[短评]', philosopher: '[哲学]', jargon: '[黑话]' };
+      const typeLabel = typeLabelMap[r.content_type || 'article'] || '[长文]';
       console.log(`${i+1}. ${typeLabel} ${r.title}`);
       console.log(`   热点: ${r.topic_title}`);
       console.log(`   状态: ${r.status} | 情绪: ${r.emotion_score} | 审查: ${reviewScore} [${reviewStatus}]`);
@@ -114,6 +115,8 @@ switch (command) {
       if ((row.content_type || 'article') === 'comment') {
         // 短评维度：结构、内容、语气、字数、AI味
         console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 字数: ${row.review_opening_score?.toFixed(2)} | AI味: ${row.review_ending_score?.toFixed(2)}`);
+      } else if ((row.content_type || 'article') === 'philosopher' || (row.content_type || 'article') === 'jargon') {
+        console.log(`质量分: ${row.review_overall_score?.toFixed(2) ?? 'N/A'}（prompt 内置评估）`);
       } else {
         console.log(`结构: ${row.review_structure_score.toFixed(2)} | 内容: ${row.review_content_score?.toFixed(2)} | 语气: ${row.review_tone_score?.toFixed(2)} | 开头: ${row.review_opening_score?.toFixed(2)} | 结尾: ${row.review_ending_score?.toFixed(2)}`);
       }
@@ -144,10 +147,10 @@ switch (command) {
     for (let i = 0; i < exportArgs.length; i++) {
       if (exportArgs[i] === '--type' && exportArgs[i + 1]) {
         const t = exportArgs[i + 1];
-        if (t === 'article' || t === 'comment') {
+        if (t === 'article' || t === 'comment' || t === 'philosopher' || t === 'jargon') {
           typeFilter = t;
         } else {
-          console.error(`无效的内容类型: ${t}，支持 article 或 comment`);
+          console.error(`无效的内容类型: ${t}，支持 article | comment | philosopher | jargon`);
           process.exit(1);
         }
         i++;
@@ -175,21 +178,24 @@ switch (command) {
     }
 
     // 按内容类型分目录
-    const articleDir = join(outDir, 'articles');
-    const commentDir = join(outDir, 'comments');
-    const hasArticles = contents.some((r: any) => (r.content_type || 'article') === 'article');
-    const hasComments = contents.some((r: any) => r.content_type === 'comment');
-    if (hasArticles) mkdirSync(articleDir, { recursive: true });
-    if (hasComments) mkdirSync(commentDir, { recursive: true });
+    const dirMap: Record<string, string> = {
+      article: join(outDir, 'articles'),
+      comment: join(outDir, 'comments'),
+      philosopher: join(outDir, 'philosopher'),
+      jargon: join(outDir, 'jargon'),
+    };
+    for (const row of contents) {
+      const ct = row.content_type || 'article';
+      if (dirMap[ct]) mkdirSync(dirMap[ct], { recursive: true });
+    }
 
     for (const row of contents) {
       const tags = typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags;
       const safeName = row.title.replace(/[<>:"/\\|?*]/g, '').slice(0, 50);
-      const isComment = (row.content_type || 'article') === 'comment';
+      const ct = row.content_type || 'article';
 
       let md: string;
-      if (isComment) {
-        // 短评格式：简洁，只有正文和标签
+      if (ct === 'comment') {
         md = `# ${row.title}
 
 ## 正文
@@ -207,9 +213,38 @@ ${row.comment_guide || ''}
 质量分数: ${row.quality_score}
 AI: ${row.ai_provider} / ${row.ai_model}
 `;
-        writeFileSync(join(commentDir, `${safeName}.md`), md);
+      } else if (ct === 'philosopher') {
+        md = `# ${row.title}
+
+## 正文
+${row.body}
+
+## 标签
+${tags.join(' ')}
+
+---
+热点来源: ${row.topic_title}
+质量分数: ${row.quality_score}
+AI: ${row.ai_provider} / ${row.ai_model}
+`;
+      } else if (ct === 'jargon') {
+        md = `# ${row.title}
+
+## 正文
+${row.body}
+
+## 标签
+${tags.join(' ')}
+
+## 点评
+${row.comment_guide || ''}
+
+---
+热点来源: ${row.topic_title}
+质量分数: ${row.quality_score}
+AI: ${row.ai_provider} / ${row.ai_model}
+`;
       } else {
-        // 长文格式：完整
         md = `# ${row.title}
 
 ## 封面文案
@@ -239,18 +274,25 @@ ${row.flux_prompt}
 质量分数: ${row.quality_score}
 AI: ${row.ai_provider} / ${row.ai_model}
 `;
-        writeFileSync(join(articleDir, `${safeName}.md`), md);
       }
+
+      const targetDir = dirMap[ct] || dirMap['article'];
+      writeFileSync(join(targetDir, `${safeName}.md`), md);
     }
 
-    const articleCount = contents.filter((r: any) => (r.content_type || 'article') === 'article').length;
-    const commentCount = contents.filter((r: any) => r.content_type === 'comment').length;
+    const typeCounts: Record<string, number> = {};
+    for (const row of contents) {
+      const ct = row.content_type || 'article';
+      typeCounts[ct] = (typeCounts[ct] || 0) + 1;
+    }
+    const typeLabelMap: Record<string, string> = { article: '长文', comment: '短评', philosopher: '哲学', jargon: '黑话' };
     if (typeFilter) {
-      console.log(`已导出 ${contents.length} 条${typeFilter === 'comment' ? '短评' : '长文'}到 ${outDir}/`);
+      console.log(`已导出 ${contents.length} 条${typeLabelMap[typeFilter] || typeFilter}到 ${outDir}/`);
     } else {
       console.log(`已导出 ${contents.length} 条内容到 ${outDir}/`);
-      if (articleCount > 0) console.log(`  长文: ${articleCount} 条 → ${articleDir}/`);
-      if (commentCount > 0) console.log(`  短评: ${commentCount} 条 → ${commentDir}/`);
+      for (const [ct, count] of Object.entries(typeCounts)) {
+        console.log(`  ${typeLabelMap[ct] || ct}: ${count} 条 → ${dirMap[ct]}/`);
+      }
     }
     break;
   }
@@ -263,7 +305,9 @@ AI: ${row.ai_provider} / ${row.ai_model}
   pnpm run view detail <id>           查看内容详情
   pnpm run view export                导出所有 draft 内容为 Markdown
   pnpm run view export --type article 仅导出长文
-  pnpm run view export --type comment 仅导出短评`);
+  pnpm run view export --type comment 仅导出短评
+  pnpm run view export --type philosopher 仅导出哲学分析
+  pnpm run view export --type jargon 仅导出黑话翻译`);
 }
 
 db.close();

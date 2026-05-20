@@ -72,6 +72,10 @@ pnpm run post:xhs
 | `pnpm run crawl` | 抓取全网热点 |
 | `pnpm run generate` | AI 生成内容（默认 3 条，自动审查） |
 | `pnpm run generate 5` | AI 生成内容（最多 5 条） |
+| `pnpm run generate --type article` | 生成长文（默认） |
+| `pnpm run generate --type comment` | 生成短评 |
+| `pnpm run generate --type philosopher` | 生成哲学本质分析 |
+| `pnpm run generate --type jargon` | 生成黑话翻译 |
 | `pnpm run input` | 手动输入热点并 AI 生成 |
 | `pnpm run post:xhs` | 发布到小红书 |
 | `pnpm run review` | 给旧文章补质量审查 |
@@ -80,6 +84,8 @@ pnpm run post:xhs
 | `pnpm run view contents` | AI 内容列表（含审查分数） |
 | `pnpm run view detail <id>` | 查看内容详情（含审查维度） |
 | `pnpm run view export` | 导出为 Markdown |
+| `pnpm run view export --type philosopher` | 仅导出哲学分析 |
+| `pnpm run view export --type jargon` | 仅导出黑话翻译 |
 | `pnpm run clear contents` | 删除所有 AI 内容和发布记录 |
 | `pnpm run clear topics` | 删除所有热点及关联数据 |
 | `pnpm run clear all` | 清空全部数据 |
@@ -118,6 +124,16 @@ pnpm run post:xhs
 | `SKILL.md` | 短评写作指令——理性温和、三段式、180-250字 |
 | `skill.json` | Skill 元数据配置 |
 
+### philosopher/ — 哲学本质分析器
+通过 CLI 生成：`pnpm run generate --type philosopher`
+
+对热点概念做"本质还原"式分析，不掉书袋，用日常场景展开哲学思考。输出包含标题、本质洞察、完整分析、收束语。
+
+### jargon/ — 黑话翻译官
+通过 CLI 生成：`pnpm run generate --type jargon`
+
+将热点话题翻译成互联网黑话，反讽式输出。默认正向模式（大白话→黑话），附带毒舌点评。
+
 ### demo/ — 项目技术文档
 | 文件 | 说明 |
 |------|------|
@@ -154,7 +170,7 @@ src/
 ├── config/          # 环境变量配置（Zod 校验）
 ├── crawler/         # 热点爬虫（微博/百度/头条/RSS）
 ├── ai/              # AI 创作 + 质量审查
-├── prompts/         # 写作 Prompt + 审查 Prompt
+├── prompts/         # 写作/短评/哲学/黑话 Prompt + 审查 Prompt
 ├── publish/         # 小红书发布（Playwright 自动化）
 ├── scheduler/       # Cron 定时任务
 ├── database/        # SQLite 数据层（WAL 模式）

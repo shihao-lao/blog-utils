@@ -1,6 +1,8 @@
 import { getAiProvider } from './factory.js';
 import { buildContentPrompt } from '../prompts/content.js';
 import { buildCommentPrompt } from '../prompts/comment.js';
+import { buildPhilosopherPrompt } from '../prompts/philosopher.js';
+import { buildJargonExpertPrompt } from '../prompts/jargonExpert.js';
 import { buildArticleReviewPrompt, parseReviewResult, buildCommentReviewSystemPrompt, parseCommentReviewResult, mapCommentReviewToReviewResult } from '../prompts/review.js';
 import { contentRepo, topicRepo } from '../database/repositories.js';
 import { createModuleLogger } from '../utils/logger.js';
@@ -10,7 +12,7 @@ import { config } from '../config/index.js';
 import type { AiGenerationResult } from './types.js';
 import type { ReviewResult } from '../prompts/review.js';
 
-export type ContentType = 'article' | 'comment';
+export type ContentType = 'article' | 'comment' | 'philosopher' | 'jargon';
 
 const log = createModuleLogger('ai:generator');
 
@@ -50,9 +52,24 @@ export class ContentGenerator {
     }
 
     // 根据内容类型构建 Prompt
-    const { system, user } = contentType === 'comment'
-      ? buildCommentPrompt(topicParams)
-      : buildContentPrompt({ ...topicParams, images: localImagePaths });
+    let system: string;
+    let user: string;
+
+    if (contentType === 'philosopher') {
+      ({ system, user } = buildPhilosopherPrompt({
+        concept: topic.title,
+        context: topic.description,
+      }));
+    } else if (contentType === 'jargon') {
+      ({ system, user } = buildJargonExpertPrompt({
+        text: `${topic.title}：${topic.description || ''}`,
+        mode: 'toJargon',
+      }));
+    } else if (contentType === 'comment') {
+      ({ system, user } = buildCommentPrompt(topicParams));
+    } else {
+      ({ system, user } = buildContentPrompt({ ...topicParams, images: localImagePaths }));
+    }
 
     // 调用 AI 生成
     const rawResult = await withRetry(() => provider.generate(user, system), {
@@ -61,7 +78,7 @@ export class ContentGenerator {
     });
 
     // 解析 JSON 结果
-    const parsed = this.parseResult(rawResult);
+    const parsed = this.parseResult(rawResult, contentType);
     if (!parsed) {
       log.error({ rawResult: rawResult.slice(0, 1000) }, 'AI 返回内容解析失败，原始内容前1000字符');
       return null;
@@ -69,10 +86,15 @@ export class ContentGenerator {
 
     log.info({ title: parsed.title, bodyLen: parsed.body.length, tags: parsed.tags, contentType }, '内容生成成功，开始质量审查');
 
-    // 质量审查（根据内容类型选择审查 prompt）
-    const review = contentType === 'comment'
-      ? await this.reviewComment(provider, parsed.body)
-      : await this.reviewArticle(provider, parsed.body);
+    // 质量审查（philosopher/jargon 使用 prompt 内置质量分，跳过审查）
+    let review: ReviewResult | null = null;
+    if (contentType === 'philosopher' || contentType === 'jargon') {
+      log.info({ contentType }, '该类型使用 prompt 内置质量评估，跳过审查');
+    } else {
+      review = contentType === 'comment'
+        ? await this.reviewComment(provider, parsed.body)
+        : await this.reviewArticle(provider, parsed.body);
+    }
     if (review) {
       log.info({
         overall: review.overall_score,
@@ -185,7 +207,8 @@ export class ContentGenerator {
 
   // 解析 AI 返回的 JSON。长文返回 titles/coverText/imagePrompts 等完整字段，
   // 短评只返回 body/tags/commentGuide/emotionScore/qualityScore，缺失字段由默认值兜底。
-  private parseResult(raw: string): AiGenerationResult | null {
+  // philosopher 返回 title/essence/body/punchline，jargon 返回 original/translated/comment/buzzwords。
+  private parseResult(raw: string, contentType?: ContentType): AiGenerationResult | null {
     try {
       // 提取 JSON 块
       const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
@@ -211,8 +234,44 @@ export class ContentGenerator {
 
       log.info({ keys: Object.keys(data), sample: JSON.stringify(data).slice(0, 300) }, 'AI 返回数据结构');
 
+      // philosopher：组合 essence + body + punchline
+      if (contentType === 'philosopher') {
+        const bodyParts = [data.essence, data.body, data.punchline].filter(Boolean);
+        return {
+          title: data.title || '',
+          body: this.cleanBody(bodyParts.join('\n\n')),
+          coverText: data.punchline || '',
+          tags: data.tags || [],
+          commentGuide: '',
+          midjourneyPrompt: '',
+          sdPrompt: '',
+          fluxPrompt: '',
+          emotionScore: 0.6,
+          qualityScore: data.qualityScore || 0.5,
+          images: [],
+        };
+      }
+
+      // jargon：translated 作为正文，comment 作为评论引导
+      if (contentType === 'jargon') {
+        return {
+          title: data.original?.slice(0, 30) || '',
+          body: this.cleanBody(data.translated || ''),
+          coverText: '',
+          tags: (data.buzzwords || []).map((w: string) => `#${w}`),
+          commentGuide: data.comment || '',
+          midjourneyPrompt: '',
+          sdPrompt: '',
+          fluxPrompt: '',
+          emotionScore: 0.5,
+          qualityScore: data.qualityScore || 0.5,
+          images: [],
+        };
+      }
+
+      // article / comment
       return {
-        title: data.titles?.[0] || '',
+        title: data.titles?.[0] || data.title || '',
         body: this.cleanBody(data.body || ''),
         coverText: data.coverText || '',
         tags: data.tags || [],

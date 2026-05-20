@@ -30,7 +30,7 @@ export class WeiboHotAdapter implements CrawlerAdapter {
         const images: string[] = [];
         if (Array.isArray(item.pic_urls)) {
           for (const pic of item.pic_urls) {
-            const url = pic.thumbnail_pic || pic.bmiddle_pic || pic.original_pic;
+            const url = pic.original_pic || pic.bmiddle_pic || pic.thumbnail_pic;
             if (url) images.push(url);
           }
         }

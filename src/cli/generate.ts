@@ -20,15 +20,16 @@ async function run() {
   const typeIdx = args.indexOf('--type');
   if (typeIdx !== -1 && args[typeIdx + 1]) {
     const t = args[typeIdx + 1];
-    if (t === 'comment' || t === 'article') {
+    if (t === 'comment' || t === 'article' || t === 'philosopher' || t === 'jargon') {
       contentType = t;
     } else {
-      log.error(`无效的内容类型: ${t}，支持 article 或 comment`);
+      log.error(`无效的内容类型: ${t}，支持 article | comment | philosopher | jargon`);
       process.exit(1);
     }
   }
 
-  const typeLabel = contentType === 'comment' ? '短评' : '长文';
+  const typeLabelMap: Record<string, string> = { article: '长文', comment: '短评', philosopher: '哲学分析', jargon: '黑话翻译' };
+  const typeLabel = typeLabelMap[contentType] || '长文';
   log.info(`开始 AI ${typeLabel}创作，最多 ${limit} 条`);
   const ids = await generator.generateBatch(limit, contentType);
 

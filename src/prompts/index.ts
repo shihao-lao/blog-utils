@@ -1,4 +1,10 @@
 export { buildContentPrompt } from './content.js';
+export { buildCommentPrompt } from './comment.js';
 export { buildArticleReviewPrompt, parseReviewResult } from './review.js';
+export { buildPhilosopherPrompt } from './philosopher.js';
+export { buildJargonExpertPrompt } from './jargonExpert.js';
 export type { ReviewPrompt, ReviewResult } from './review.js';
 export type { ContentPrompt } from './content.js';
+export type { CommentPrompt } from './comment.js';
+export type { PhilosopherPrompt } from './philosopher.js';
+export type { JargonExpertPrompt } from './jargonExpert.js';
