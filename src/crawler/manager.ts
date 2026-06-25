@@ -1,4 +1,5 @@
 import { createModuleLogger } from '../utils/logger.js';
+import { sleep } from '../utils/retry.js';
 import { topicRepo } from '../database/repositories.js';
 import { WeiboHotAdapter } from './adapters/weibo.js';
 import { BaiduHotAdapter } from './adapters/baidu.js';
@@ -45,7 +46,7 @@ export class CrawlerManager {
       if (i < this.adapters.length - 1) {
         const delay = 2000 + Math.floor(Math.random() * 3000);
         log.debug({ source: adapter.name, nextDelay: delay }, '等待后抓取下一个源');
-        await new Promise((r) => setTimeout(r, delay));
+        await sleep(delay);
       }
     }
 

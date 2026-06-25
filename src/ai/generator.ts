@@ -295,8 +295,8 @@ export class ContentGenerator {
     const cleaned = lines.filter((line) => {
       const trimmed = line.trim();
       if (!trimmed) return true;
-      // 包含中文字符的行保留
-      if (/[一-鿿]/.test(trimmed)) return true;
+      // 包含中文字符的行保留（使用 Unicode 属性转义，覆盖所有 CJK 统一表意文字）
+      if (/\p{Script=Han}/u.test(trimmed)) return true;
       // 纯英文行（看起来像句子的）移除
       if (/^[A-Za-z][\w\s,.'":;!?()-]{10,}$/.test(trimmed)) return false;
       return true;

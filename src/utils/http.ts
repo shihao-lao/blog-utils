@@ -16,7 +16,20 @@ const defaultConfig: AxiosRequestConfig = {
 };
 
 if (config.HTTP_PROXY || config.HTTPS_PROXY) {
-  // proxy support via env
+  const proxyUrl = config.HTTPS_PROXY || config.HTTP_PROXY;
+  if (proxyUrl) {
+    try {
+      const url = new URL(proxyUrl);
+      defaultConfig.proxy = {
+        host: url.hostname,
+        port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
+        protocol: url.protocol,
+      };
+      log.info({ proxy: proxyUrl }, '已配置 HTTP(S) 代理');
+    } catch {
+      log.warn({ proxy: proxyUrl }, '代理地址格式无效，已忽略');
+    }
+  }
 }
 
 export function createHttpClient(extraConfig?: AxiosRequestConfig): AxiosInstance {
