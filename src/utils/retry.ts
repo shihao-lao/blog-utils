@@ -29,7 +29,10 @@ export async function withRetry<T>(
     } catch (err) {
       lastError = err as Error;
       if (attempt < maxRetries) {
-        const waitTime = delay * Math.pow(backoff, attempt - 1);
+        // 添加 ±25% 随机抖动，防止多个任务同时重试（惊群效应）
+        const baseDelay = delay * Math.pow(backoff, attempt - 1);
+        const jitter = baseDelay * 0.25 * (Math.random() * 2 - 1);
+        const waitTime = Math.max(0, Math.round(baseDelay + jitter));
         log.warn(
           { attempt, maxRetries, waitTime, error: lastError.message },
           `第 ${attempt} 次尝试失败，${waitTime}ms 后重试`,
